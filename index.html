@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>view3d</title>
+    <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+    <div class="display">
+        <canvas id="canvas"></canvas>
+        <div class="controls">
+        </div>
+    </div>
+</body>
+<script type="text/javascript">
+    let canvas = document.getElementById("canvas");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    var Module = {};
+    Module.canvas = canvas;
+</script>
+<script src="module.js"></script>
+<script src="view3d.js"></script>
+</html>
