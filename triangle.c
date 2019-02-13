@@ -8,41 +8,35 @@
 #include "error.h"
 
 // Globals
-GLuint program;
 SDL_Surface* screen;
-GLfloat triangle_vertices[] = {
-    0.0f,  0.4f, 0.0f,
-   -0.4f, -0.4f, 0.0f,
-    0.4f, -0.4f, 0.0f,
-};
-GLfloat triangle_vertices2[] = {
-    0.8f,  0.4f, 0.0f,
-    0.0f,  0.4f, 0.0f,
-    0.4f, -0.4f, 0.0f,
-};
-GLint uniformOriginX, uniformOriginY, uniformZoom;
+GLuint program, vbo_triangle;
+GLint attribute_coord3d, attribute_v_color;
+GLint uniform_fade;
 
-GLint attribute_coord2d;
+typedef struct attributes {
+    GLfloat coord3d[3];
+    GLfloat v_color[3];
+} attributes;
 
 bool init_resources(void) {
+    // Initialize triangle buffer
+    attributes triangle_attributes[] = {
+        {{0.0f,  0.4f, 0.0}, {1.0f, 1.0f, 0.0f}},
+        {{-0.4f, -0.4f, 0.0}, {0.0f, 0.0f, 1.0f}},
+        {{0.4f, -0.4f, 0.0}, {1.0f, 0.0f, 0.0f}},
+    };
+    glGenBuffers(1, &vbo_triangle);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_attributes), triangle_attributes, GL_STATIC_DRAW);
+
     // Vertex Shader
     const char *vs_source =
-        /*"attribute vec4 vPosition;                           \n"
-	"uniform float originX, originY;                     \n"
-	"uniform float zoom;                                 \n"
-	"varying vec3 color;                                 \n"
-	"void main()                                         \n"
-	"{                                                   \n"
-	"   gl_Position = vPosition;                         \n"
-	"   gl_Position.x = (originX + gl_Position.x) * zoom;\n"
-	"   gl_Position.y = (originY + gl_Position.y) * zoom;\n"
-	"   color = gl_Position.xyz + vec3(0.5);             \n"
-        "}                                                   \n";*/
-        "attribute vec2 coord2d;"
-        "varying vec3 color;"
+        "attribute vec3 coord3d;"
+        "attribute vec3 v_color;"
+        "varying vec3 f_color;"
         "void main() {"
-        "   gl_Position = vec4(coord2d, 0.0, 1.0);"
-        "   color = gl_Position.xyz + vec3(0.5);"
+        "   gl_Position = vec4(coord3d, 1.0);"
+        "   f_color = v_color;"
         "}";
 	
     GLuint vs = loadShader(GL_VERTEX_SHADER, vs_source);
@@ -53,10 +47,12 @@ bool init_resources(void) {
     // Fragment Shader
     const char *fs_source =
         "precision mediump float;"
-        "varying vec3 color;"
+        "varying vec3 f_color;"
+        "uniform float fade;"
         "void main(void) {"
-        "   gl_FragColor = vec4(color, 1.0);"
+        "   gl_FragColor = vec4(f_color.r, f_color.g, f_color.b, fade);"
         "}";
+
     GLuint fs = loadShader(GL_FRAGMENT_SHADER, fs_source);
 
     if(isError()) {
@@ -66,9 +62,16 @@ bool init_resources(void) {
     // Link it!
     program = buildProgram(vs, fs, "vPosition");
 
-    attribute_coord2d = glGetAttribLocation(program, "coord2d");
-    if(attribute_coord2d == -1) {
+    // Declare attributes and uniforms
+    attribute_coord3d = glGetAttribLocation(program, "coord3d");
+    attribute_v_color = glGetAttribLocation(program, "v_color");
+    if(attribute_coord3d == -1 || attribute_v_color == -1) {
         setError("Couldn't bind attribute");
+    }
+
+    uniform_fade = glGetUniformLocation(program, "fade");
+    if(uniform_fade == -1) {
+        setError("Couldn't bind uniform");
     }
 
     return isError() ? 1 : 0;
@@ -86,41 +89,55 @@ int init(int width, int height) {
         setError((char*)SDL_GetError());
         return 1;
     }
-/*
+
     GLenum glew_status = glewInit();
     if (glew_status != GLEW_OK) {
         setError((char*)glewGetErrorString(glew_status));
         return 1;
     }
-*/
+
     if(init_resources() == 1) {
         return 1;
     }
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f); 
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 1); // request alpha channel
     glViewport(0, 0, width, height);
-    glEnableVertexAttribArray(0);
+    //glEnableVertexAttribArray(0);
 
     return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
-void drawTriangle() {
+void drawTriangle(float fade) {
     glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(program);
-        
-    // Set up the translation
-    glUniform1f(uniformOriginX, 0.5f);
-    glUniform1f(uniformOriginY, 0.5f);
-    glUniform1f(uniformZoom, 1.0f);
+    
+    // Enable alpha
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    
 
-    // Describe our vertices array to OpenGL, then push each element to the vertex shader
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, triangle_vertices);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    // Set uniform value
+    glUniform1f(uniform_fade, fade);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, triangle_vertices2);
+    // Bind buffers and activate arrays
+    glEnableVertexAttribArray(attribute_coord3d);
+    glEnableVertexAttribArray(attribute_v_color);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle);
+    glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE, sizeof(attributes), 0);
+    glVertexAttribPointer(attribute_v_color, 3, GL_FLOAT, GL_FALSE, sizeof(attributes), (GLvoid*) offsetof(attributes, v_color));
+
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     // Display the result
     SDL_GL_SwapBuffers();
+
+    // Clean up
+    glDisableVertexAttribArray(attribute_v_color);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void free_resources() {
+    glDeleteProgram(program);
+    glDeleteBuffers(1, &vbo_triangle);
 }
