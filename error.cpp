@@ -1,14 +1,14 @@
 #include "emscripten.h"
 #include "error.h"
 
-char* error = NULL;
+char* error;
 
-void setError(char* err) {
-    error = err;
+void setError(const char* err) {
+    error = (char*)err;
 }
 
 EMSCRIPTEN_KEEPALIVE
-char* getError() {
+extern "C" char* getError() {
     return error;
 }
 
@@ -17,6 +17,6 @@ void clearError() {
 }
 
 EMSCRIPTEN_KEEPALIVE
-bool isError() {
+extern "C" bool isError() {
     return error != NULL;
 }

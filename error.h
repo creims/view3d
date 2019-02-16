@@ -3,9 +3,9 @@
 
 #include <stdbool.h>
 
-void setError(char* err);
-char* getError();
+void setError(const char* err);
+extern "C" char* getError();
 void clearError();
-bool isError();
+extern "C" bool isError();
 
 #endif
