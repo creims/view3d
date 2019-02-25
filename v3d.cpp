@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL 
 #include <stdlib.h>
 #include <stdbool.h>
 #include "emscripten.h"
@@ -8,21 +9,24 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include "shaders.h"
 #include "error.h"
 
-#define degToRad(angle) (angle * M_PI / 180.0)
-
 // Globals
 SDL_Surface* screen;
 int screen_width, screen_height;
+glm::vec3 camera;
 
 GLuint program, vbo_cube_vertices, vbo_cube_colors, ibo_cube_elements;
 GLint attribute_coord3d, attribute_v_color;
 GLint uniform_mvp;
 
 bool init_resources(void) {
+    // Initialize camera
+    camera = glm::vec3(1.0, 0.0, 0.0);
+
     // Initialize vertex buffer
     GLfloat cube_vertices[] = {
         -1.0, -1.0, 1.0,
@@ -129,26 +133,23 @@ bool init_resources(void) {
 }
 
 void logic(float radius, float phi, float theta) {
-    phi = degToRad(phi);
-    theta = degToRad(theta);
+    phi = glm::radians(phi);
+    theta = glm::radians(theta);
     
     // Translate cube to background (move it in the world)
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0.0, 0.0));
 
     // Calculate our view (move and aim the camera)
     // lookAt(cameraPosition, lookingAt, and upVector)
-    glm::vec3 camera = glm::vec3(radius * sinf(phi) * cosf(theta),
-                        radius * sinf(phi) * sinf(theta),
-                        radius * cosf(phi)
-                        );
-    glm::mat4 view = glm::lookAt(camera, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0, 0.0, 1.0));;
+    glm::quat rot = glm::quat(glm::vec3(phi, theta, 0.0));
+    glm::mat4 view = glm::lookAt(glm::vec3(1.0, 1.0, 1.0) * radius, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0, 0.0, 1.0));;
 
     // Calculate projection onto screen
     // perspective(verticalFieldOfView, aspectRatio, zNear, zFar)
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f * screen_width / screen_height, 0.1f, 20.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f * screen_width / screen_height, 0.1f, 2000.0f);
 
     // Combine the result into one transformation matrix
-    glm::mat4 mvp = projection * view * model;
+    glm::mat4 mvp = projection * view * model * glm::toMat4(rot);
 
     glUseProgram(program);
     glUniformMatrix4fv(uniform_mvp, 1, GL_FALSE, glm::value_ptr(mvp));

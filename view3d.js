@@ -10,17 +10,17 @@ const dragSensitivity = 1.0;
 const minZoom = 1.0;
 const maxZoom = 20.0;
 
-const defPhi = 45.0;
-const defTheta = 45.0;
+const defPhi = 0.0;
+const defTheta = 0.0;
 const defZoom = 8.0;
 
 let api;
 let mouseDown = false;
 let lastX, lastY; // For tracking where user mouse is when clicked
 let camera = {
-    zoom: 8.0,
-    phi: 0.0,
-    theta: 0.0,
+    zoom: defZoom,
+    phi: defPhi,
+    theta: defTheta,
 }
 
 Module.onRuntimeInitialized = async _ => {
@@ -82,7 +82,7 @@ function clock(num, max) {
 }
 
 function setPhi(newPhi) {
-    newPhi = clamp(newPhi, 1.0, 179.0);
+    newPhi = clock(newPhi, 360.0);
     labelPhi.textContent = newPhi;
     rangePhi.value = newPhi;
     camera.phi = newPhi;
